@@ -3,27 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Core - Bypass Edition</title>
+    <title>AI Core v10 - Final</title>
     <style>
         :root { --bg: #0d1117; --card: #161b22; --accent: #238636; --text: #c9d1d9; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 95vh; }
-        #status { font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold; color: #8b949e; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 98vh; overflow: hidden; }
+        #status { font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold; color: #ffab70; }
         #progress-container { width: 100%; height: 8px; background: #30363d; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
         #progress-bar { width: 0%; height: 100%; background: var(--accent); transition: width 0.3s; }
-        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 15px; }
         .controls { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #010409; color: white; outline: none; }
+        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #010409; color: white; outline: none; font-size: 16px; }
         button { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         button:disabled { opacity: 0.3; }
+        .reset-btn { background: #da3633; font-size: 10px; margin-bottom: 10px; padding: 5px; width: 100%; }
     </style>
 </head>
 <body>
 
-    <div id="status">TUNNELING THROUGH FIREWALL...</div>
+    <div id="status">INITIALIZING HANDSHAKE...</div>
     <div id="progress-container"><div id="progress-bar"></div></div>
     
+    <button class="reset-btn" onclick="clearEverything()">FORCE RESET ENGINE (CLEARS CACHE)</button>
+
     <div id="chat">
-        <div><b>System:</b> Attempting to bypass GitHub security headers. Please wait for the download to start.</div>
+        <div><b>System:</b> Establishing secure English-only tunnel. Please wait for the download...</div>
     </div>
 
     <div class="controls">
@@ -32,14 +35,11 @@
     </div>
 
     <script type="module">
-        // Using a version specifically built for browser-only environments
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-        // THE ULTIMATE BYPASS FLAGS
+        // THE BYPASS FLAGS: Tells GitHub to stay out of it
         env.allowLocalModels = false;
-        env.useBrowserCache = true; 
-        
-        // This 'anonymous' flag is what usually kills the "Unauthorized" error
+        env.useBrowserCache = true;
         env.remoteHost = 'https://huggingface.co/';
         env.remotePathTemplate = '{model}/resolve/{revision}/';
 
@@ -49,33 +49,40 @@
         const userIn = document.getElementById('user-in');
         const btn = document.getElementById('send-btn');
 
+        // Reset function for when the AI starts speaking in tongues
+        window.clearEverything = async () => {
+            const databases = await indexedDB.databases();
+            for (let db of databases) { if (db.name.includes('transformers')) indexedDB.deleteDatabase(db.name); }
+            alert("Old brain wiped. Reloading for a fresh English install!");
+            window.location.reload();
+        };
+
         let bot;
 
         async function init() {
             try {
-                // Switching to a highly-compatible version of GPT-2 
-                // It is the most 'publicly' accessible model on the CDN
-                bot = await pipeline('text-generation', 'Xenova/gpt2', {
+                // TinyLlama is 100% English and very stable on phones
+                bot = await pipeline('text-generation', 'Xenova/TinyLlama-1.1B-Chat-v1.0', {
                     progress_callback: (p) => {
                         if (p.status === 'progress') {
                             progress.style.width = p.progress + '%';
-                            status.textContent = `BYPASSING: ${Math.round(p.progress)}%`;
+                            status.textContent = `SYNCING BRAIN: ${Math.round(p.progress)}%`;
                         }
                     }
                 });
 
                 status.textContent = "● CORE ONLINE";
+                status.style.color = "#3fb950";
                 userIn.disabled = false;
                 btn.disabled = false;
-                userIn.placeholder = "Message the AI...";
+                userIn.placeholder = "Talk to me...";
             } catch (e) {
-                // FALLBACK: If the smart model is blocked, try the most basic one
-                status.textContent = "STILL BLOCKED - CHECK CONSOLE";
-                console.error("Critical Security Block:", e);
+                status.textContent = "CORE BLOCKED: CLICK RESET";
+                console.error(e);
             }
         }
 
-        async function run() {
+        async function handleChat() {
             const text = userIn.value.trim();
             if(!text) return;
             
@@ -84,23 +91,31 @@
             btn.disabled = true;
             status.textContent = "THINKING...";
 
-            // Low-RAM response settings to prevent "Forever Thinking"
-            const out = await bot(text, { 
-                max_new_tokens: 40, 
-                temperature: 0.1, // Fixed logic to stop random city names
-                repetition_penalty: 2.0 
-            });
-            
-            const reply = out[0].generated_text.replace(text, "").trim();
-            chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply || "Done."}</div>`;
-            
+            // THE PROMPT TEMPLATE: This locks the AI into English and Chat mode
+            const prompt = `<|system|>\nYou are a helpful AI assistant who only speaks English. Always respond clearly and concisely.</s>\n<|user|>\n${text}</s>\n<|assistant|>\n`;
+
+            try {
+                const out = await bot(prompt, { 
+                    max_new_tokens: 100, 
+                    temperature: 0.5, 
+                    do_sample: true,
+                    repetition_penalty: 1.3,
+                    stop: ["</s>"]
+                });
+                
+                const reply = out[0].generated_text.split('<|assistant|>\n')[1]?.trim() || "I am processing...";
+                chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply}</div>`;
+            } catch (err) {
+                chat.innerHTML += `<div style="color:red">Handshake Timeout. Try again.</div>`;
+            }
+
             btn.disabled = false;
             status.textContent = "● CORE ONLINE";
             chat.scrollTop = chat.scrollHeight;
         }
 
-        btn.onclick = run;
-        userIn.onkeypress = (e) => { if(e.key === 'Enter') run(); };
+        btn.onclick = handleChat;
+        userIn.onkeypress = (e) => { if(e.key === 'Enter') handleChat(); };
         init();
     </script>
 </body>
