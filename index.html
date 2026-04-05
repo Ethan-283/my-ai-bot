@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Core - Zero Auth</title>
+    <title>AI Core - Version 17</title>
     <style>
         :root { --bg: #0d1117; --card: #161b22; --accent: #238636; --text: #c9d1d9; }
         body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 95vh; }
         #status { font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold; color: #ffab70; }
         #progress-container { width: 100%; height: 8px; background: #30363d; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
         #progress-bar { width: 0%; height: 100%; background: var(--accent); transition: width 0.3s; }
-        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 15px; }
         .controls { display: flex; gap: 10px; }
         input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #010409; color: white; outline: none; }
         button { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -19,34 +19,29 @@
 </head>
 <body>
 
-    <div id="status">STRIPPING AUTH HEADERS...</div>
+    <div id="status">WIPING OLD CACHE...</div>
     <div id="progress-container"><div id="progress-bar"></div></div>
     
     <div id="chat">
-        <div><b>System:</b> Forcing anonymous handshake to bypass the Unauthorized error.</div>
+        <div><b>System:</b> Forcing a clean English install. If the bar doesn't move, check your Wi-Fi.</div>
     </div>
 
     <div class="controls">
-        <input type="text" id="user-in" placeholder="Connecting..." disabled>
+        <input type="text" id="user-in" placeholder="Downloading..." disabled>
         <button id="send-btn" disabled>Send</button>
     </div>
 
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-        // THE "UNAUTHORIZED" KILLER
+        // THE BYPASS SETTINGS
         env.allowLocalModels = false;
         env.useBrowserCache = true;
-        
-        // This configuration forces the browser to ignore GitHub's credentials
         env.remoteHost = 'https://huggingface.co/';
         env.remotePathTemplate = '{model}/resolve/{revision}/';
         
-        // CUSTOM FETCH CONFIG: This is the secret sauce
-        env.fetch_options = {
-            mode: 'cors',
-            credentials: 'omit' // This tells the browser: "Don't send ANY cookies/auth"
-        };
+        // This stops the "Unauthorized" error by hiding your GitHub identity
+        env.fetch_options = { credentials: 'omit' };
 
         const status = document.getElementById('status');
         const progress = document.getElementById('progress-bar');
@@ -58,22 +53,22 @@
 
         async function init() {
             try {
-                // We use GPT-2 for this test because it's the most "publicly" open file
-                bot = await pipeline('text-generation', 'Xenova/gpt2', {
+                // Switching to SmolLM-135M. It is too "smart" to say New York City.
+                bot = await pipeline('text-generation', 'Xenova/SmolLM-135M-Instruct', {
                     progress_callback: (p) => {
                         if (p.status === 'progress') {
                             progress.style.width = p.progress + '%';
-                            status.textContent = `DOWNLOADING: ${Math.round(p.progress)}%`;
+                            status.textContent = `NEW BRAIN SYNC: ${Math.round(p.progress)}%`;
                         }
                     }
                 });
 
-                status.textContent = "● CORE ONLINE";
+                status.textContent = "● ENGINE READY";
                 userIn.disabled = false;
                 btn.disabled = false;
-                userIn.placeholder = "Say hello...";
+                userIn.placeholder = "Talk to me...";
             } catch (e) {
-                status.textContent = "CORE BLOCKED: TRY INCOGNITO";
+                status.textContent = "STILL BLOCKED - CHECK CONSOLE";
                 console.error(e);
             }
         }
@@ -87,24 +82,38 @@
             btn.disabled = true;
             status.textContent = "THINKING...";
 
-            // Temperature 0.1 stops the "New York City" hallucination
-            const out = await bot(text, { 
-                max_new_tokens: 30, 
-                temperature: 0.1, 
-                repetition_penalty: 2.0 
+            // This prompt format stops the AI from acting like a story writer
+            const prompt = `<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
+
+            const out = await bot(prompt, { 
+                max_new_tokens: 50, 
+                temperature: 0.1, // Forces logic, kills hallucinations
+                repetition_penalty: 2.0,
+                stop: ["<|im_end|>"]
             });
             
-            const reply = out[0].generated_text.replace(text, "").trim();
-            chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply || "..."}</div>`;
+            let reply = out[0].generated_text.split('assistant\n')[1]?.replace('<|im_end|>', '').trim();
+            chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply || "Done."}</div>`;
             
             btn.disabled = false;
-            status.textContent = "● CORE ONLINE";
+            status.textContent = "● ENGINE READY";
             chat.scrollTop = chat.scrollHeight;
         }
 
+        // AUTO-NUKE ON STARTUP
+        (async () => {
+            if (!localStorage.getItem('v17_cleaned')) {
+                const dbs = await indexedDB.databases();
+                for (let db of dbs) { if (db.name.includes('transformers')) await indexedDB.deleteDatabase(db.name); }
+                localStorage.setItem('v17_cleaned', 'true');
+                window.location.reload();
+            } else {
+                init();
+            }
+        })();
+
         btn.onclick = run;
         userIn.onkeypress = (e) => { if(e.key === 'Enter') run(); };
-        init();
     </script>
 </body>
 </html>
