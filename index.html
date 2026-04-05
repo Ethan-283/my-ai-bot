@@ -3,41 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Core v10 - Final</title>
+    <title>AI Core v11 - Clean Install</title>
     <style>
         :root { --bg: #0d1117; --card: #161b22; --accent: #238636; --text: #c9d1d9; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 98vh; overflow: hidden; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 98vh; }
         #status { font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold; color: #ffab70; }
         #progress-container { width: 100%; height: 8px; background: #30363d; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
         #progress-bar { width: 0%; height: 100%; background: var(--accent); transition: width 0.3s; }
-        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 15px; }
+        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
         .controls { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #010409; color: white; outline: none; font-size: 16px; }
+        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #010409; color: white; outline: none; }
         button { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        button:disabled { opacity: 0.3; }
-        .reset-btn { background: #da3633; font-size: 10px; margin-bottom: 10px; padding: 5px; width: 100%; }
+        .warning { color: #f85149; font-size: 12px; text-align: center; margin-bottom: 5px; }
     </style>
 </head>
 <body>
 
-    <div id="status">INITIALIZING HANDSHAKE...</div>
+    <div id="status">WIPING CORRUPTED CACHE...</div>
     <div id="progress-container"><div id="progress-bar"></div></div>
+    <div class="warning">Wait for the green bar. Do not close the tab.</div>
     
-    <button class="reset-btn" onclick="clearEverything()">FORCE RESET ENGINE (CLEARS CACHE)</button>
-
     <div id="chat">
-        <div><b>System:</b> Establishing secure English-only tunnel. Please wait for the download...</div>
+        <div><b>System:</b> Forcing a fresh English-only install to stop the gibberish.</div>
     </div>
 
     <div class="controls">
-        <input type="text" id="user-in" placeholder="Connecting..." disabled>
+        <input type="text" id="user-in" placeholder="Downloading..." disabled>
         <button id="send-btn" disabled>Send</button>
     </div>
 
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-        // THE BYPASS FLAGS: Tells GitHub to stay out of it
+        // 1. KILL THE OLD DATA
+        async function nukeCache() {
+            const dbs = await indexedDB.databases();
+            for (let db of dbs) {
+                if (db.name.includes('transformers')) {
+                    await indexedDB.deleteDatabase(db.name);
+                    console.log("Deleted old AI brain:", db.name);
+                }
+            }
+        }
+
+        // 2. SET UP THE NEW ENVIRONMENT
         env.allowLocalModels = false;
         env.useBrowserCache = true;
         env.remoteHost = 'https://huggingface.co/';
@@ -49,40 +58,31 @@
         const userIn = document.getElementById('user-in');
         const btn = document.getElementById('send-btn');
 
-        // Reset function for when the AI starts speaking in tongues
-        window.clearEverything = async () => {
-            const databases = await indexedDB.databases();
-            for (let db of databases) { if (db.name.includes('transformers')) indexedDB.deleteDatabase(db.name); }
-            alert("Old brain wiped. Reloading for a fresh English install!");
-            window.location.reload();
-        };
-
         let bot;
 
         async function init() {
             try {
-                // TinyLlama is 100% English and very stable on phones
+                // We use TinyLlama because it is the most stable English model for browsers
                 bot = await pipeline('text-generation', 'Xenova/TinyLlama-1.1B-Chat-v1.0', {
                     progress_callback: (p) => {
                         if (p.status === 'progress') {
                             progress.style.width = p.progress + '%';
-                            status.textContent = `SYNCING BRAIN: ${Math.round(p.progress)}%`;
+                            status.textContent = `DOWNLOADING NEW BRAIN: ${Math.round(p.progress)}%`;
                         }
                     }
                 });
 
-                status.textContent = "● CORE ONLINE";
-                status.style.color = "#3fb950";
+                status.textContent = "● SMART CORE ONLINE";
                 userIn.disabled = false;
                 btn.disabled = false;
-                userIn.placeholder = "Talk to me...";
+                userIn.placeholder = "Say hello...";
             } catch (e) {
-                status.textContent = "CORE BLOCKED: CLICK RESET";
+                status.textContent = "CORE BLOCKED - REFRESH PAGE";
                 console.error(e);
             }
         }
 
-        async function handleChat() {
+        async function run() {
             const text = userIn.value.trim();
             if(!text) return;
             
@@ -91,32 +91,39 @@
             btn.disabled = true;
             status.textContent = "THINKING...";
 
-            // THE PROMPT TEMPLATE: This locks the AI into English and Chat mode
-            const prompt = `<|system|>\nYou are a helpful AI assistant who only speaks English. Always respond clearly and concisely.</s>\n<|user|>\n${text}</s>\n<|assistant|>\n`;
+            // This specific template forces the AI to be an assistant, not a book completer
+            const prompt = `<|system|>\nYou are a helpful AI assistant. Respond only in English.</s>\n<|user|>\n${text}</s>\n<|assistant|>\n`;
 
-            try {
-                const out = await bot(prompt, { 
-                    max_new_tokens: 100, 
-                    temperature: 0.5, 
-                    do_sample: true,
-                    repetition_penalty: 1.3,
-                    stop: ["</s>"]
-                });
-                
-                const reply = out[0].generated_text.split('<|assistant|>\n')[1]?.trim() || "I am processing...";
-                chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply}</div>`;
-            } catch (err) {
-                chat.innerHTML += `<div style="color:red">Handshake Timeout. Try again.</div>`;
-            }
-
+            const out = await bot(prompt, { 
+                max_new_tokens: 80, 
+                temperature: 0.4, 
+                do_sample: true,
+                repetition_penalty: 1.5,
+                stop: ["</s>"]
+            });
+            
+            let reply = out[0].generated_text.split('<|assistant|>\n')[1]?.replace('</s>', '').trim() || "I am thinking...";
+            chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply}</div>`;
+            
             btn.disabled = false;
-            status.textContent = "● CORE ONLINE";
+            status.textContent = "● SMART CORE ONLINE";
             chat.scrollTop = chat.scrollHeight;
         }
 
-        btn.onclick = handleChat;
-        userIn.onkeypress = (e) => { if(e.key === 'Enter') handleChat(); };
-        init();
+        // STARTUP LOGIC
+        (async () => {
+            // If the AI was acting crazy, we nuke it once.
+            if (!localStorage.getItem('first_clean_v11')) {
+                await nukeCache();
+                localStorage.setItem('first_clean_v11', 'true');
+                window.location.reload();
+            } else {
+                init();
+            }
+        })();
+
+        btn.onclick = run;
+        userIn.onkeypress = (e) => { if(e.key === 'Enter') run(); };
     </script>
 </body>
 </html>
