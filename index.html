@@ -1,119 +1,109 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Core - Version 17</title>
-    <style>
-        :root { --bg: #0d1117; --card: #161b22; --accent: #238636; --text: #c9d1d9; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; height: 95vh; }
-        #status { font-size: 13px; text-align: center; margin-bottom: 10px; font-weight: bold; color: #ffab70; }
-        #progress-container { width: 100%; height: 8px; background: #30363d; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
-        #progress-bar { width: 0%; height: 100%; background: var(--accent); transition: width 0.3s; }
-        #chat { flex: 1; background: var(--card); border: 1px solid #30363d; overflow-y: auto; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 15px; }
-        .controls { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #010409; color: white; outline: none; }
-        button { padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        button:disabled { opacity: 0.3; }
-    </style>
-</head>
-<body>
+<script type="module">
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-    <div id="status">WIPING OLD CACHE...</div>
-    <div id="progress-container"><div id="progress-bar"></div></div>
-    
-    <div id="chat">
-        <div><b>System:</b> Forcing a clean English install. If the bar doesn't move, check your Wi-Fi.</div>
-    </div>
+// SETTINGS
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+env.remoteHost = 'https://huggingface.co/';
+env.remotePathTemplate = '{model}/resolve/{revision}/';
+env.fetch_options = { credentials: 'omit' };
 
-    <div class="controls">
-        <input type="text" id="user-in" placeholder="Downloading..." disabled>
-        <button id="send-btn" disabled>Send</button>
-    </div>
+const status = document.getElementById('status');
+const progress = document.getElementById('progress-bar');
+const chat = document.getElementById('chat');
+const userIn = document.getElementById('user-in');
+const btn = document.getElementById('send-btn');
 
-    <script type="module">
-        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+let bot;
 
-        // THE BYPASS SETTINGS
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-        env.remoteHost = 'https://huggingface.co/';
-        env.remotePathTemplate = '{model}/resolve/{revision}/';
-        
-        // This stops the "Unauthorized" error by hiding your GitHub identity
-        env.fetch_options = { credentials: 'omit' };
+// 🔥 MEMORY SYSTEM (makes it feel "unlimited")
+let history = [
+    "You are a helpful, smart AI assistant. Speak clearly and make sense."
+];
 
-        const status = document.getElementById('status');
-        const progress = document.getElementById('progress-bar');
-        const chat = document.getElementById('chat');
-        const userIn = document.getElementById('user-in');
-        const btn = document.getElementById('send-btn');
-
-        let bot;
-
-        async function init() {
-            try {
-                // Switching to SmolLM-135M. It is too "smart" to say New York City.
-                bot = await pipeline('text-generation', 'Xenova/SmolLM-135M-Instruct', {
-                    progress_callback: (p) => {
-                        if (p.status === 'progress') {
-                            progress.style.width = p.progress + '%';
-                            status.textContent = `NEW BRAIN SYNC: ${Math.round(p.progress)}%`;
-                        }
+async function init() {
+    try {
+        // 🔥 MUCH BETTER MODEL
+        bot = await pipeline(
+            'text-generation',
+            'Xenova/Phi-3-mini-4k-instruct',
+            {
+                progress_callback: (p) => {
+                    if (p.status === 'progress') {
+                        progress.style.width = p.progress + '%';
+                        status.textContent = `LOADING MODEL: ${Math.round(p.progress)}%`;
                     }
-                });
+                }
+            }
+        );
 
-                status.textContent = "● ENGINE READY";
-                userIn.disabled = false;
-                btn.disabled = false;
-                userIn.placeholder = "Talk to me...";
-            } catch (e) {
-                status.textContent = "STILL BLOCKED - CHECK CONSOLE";
-                console.error(e);
+        status.textContent = "● ENGINE READY";
+        userIn.disabled = false;
+        btn.disabled = false;
+        userIn.placeholder = "Talk to me...";
+
+    } catch (e) {
+        status.textContent = "ERROR LOADING MODEL";
+        console.error(e);
+    }
+}
+
+async function run() {
+    const text = userIn.value.trim();
+    if (!text) return;
+
+    chat.innerHTML += `<div><b>You:</b> ${text}</div>`;
+    userIn.value = "";
+    btn.disabled = true;
+    status.textContent = "THINKING...";
+
+    // 🧠 ADD TO MEMORY
+    history.push(`User: ${text}`);
+
+    // 🔥 BUILD FULL CONTEXT (VERY HIGH LIMIT)
+    let prompt = history.join("\n") + "\nAssistant:";
+
+    const out = await bot(prompt, {
+        max_new_tokens: 300,       // 🔥 VERY HIGH RESPONSE LENGTH
+        temperature: 0.7,
+        top_p: 0.9,
+        repetition_penalty: 1.1,
+        do_sample: true
+    });
+
+    let reply = out[0].generated_text.replace(prompt, '').trim();
+
+    // 🧠 SAVE RESPONSE
+    history.push(`Assistant: ${reply}`);
+
+    // 🔥 PREVENT INFINITE MEMORY CRASH
+    if (history.length > 20) {
+        history.splice(1, 2); // remove oldest messages (keep system prompt)
+    }
+
+    chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply}</div>`;
+
+    btn.disabled = false;
+    status.textContent = "● ENGINE READY";
+    chat.scrollTop = chat.scrollHeight;
+}
+
+// CLEAN CACHE ON FIRST RUN
+(async () => {
+    if (!localStorage.getItem('v18_cleaned')) {
+        const dbs = await indexedDB.databases();
+        for (let db of dbs) {
+            if (db.name.includes('transformers')) {
+                await indexedDB.deleteDatabase(db.name);
             }
         }
+        localStorage.setItem('v18_cleaned', 'true');
+        window.location.reload();
+    } else {
+        init();
+    }
+})();
 
-        async function run() {
-            const text = userIn.value.trim();
-            if(!text) return;
-            
-            chat.innerHTML += `<div><b>You:</b> ${text}</div>`;
-            userIn.value = "";
-            btn.disabled = true;
-            status.textContent = "THINKING...";
-
-            // This prompt format stops the AI from acting like a story writer
-            const prompt = `<|im_start|>user\n${text}<|im_end|>\n<|im_start|>assistant\n`;
-
-            const out = await bot(prompt, { 
-                max_new_tokens: 50, 
-                temperature: 0.1, // Forces logic, kills hallucinations
-                repetition_penalty: 2.0,
-                stop: ["<|im_end|>"]
-            });
-            
-            let reply = out[0].generated_text.split('assistant\n')[1]?.replace('<|im_end|>', '').trim();
-            chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply || "Done."}</div>`;
-            
-            btn.disabled = false;
-            status.textContent = "● ENGINE READY";
-            chat.scrollTop = chat.scrollHeight;
-        }
-
-        // AUTO-NUKE ON STARTUP
-        (async () => {
-            if (!localStorage.getItem('v17_cleaned')) {
-                const dbs = await indexedDB.databases();
-                for (let db of dbs) { if (db.name.includes('transformers')) await indexedDB.deleteDatabase(db.name); }
-                localStorage.setItem('v17_cleaned', 'true');
-                window.location.reload();
-            } else {
-                init();
-            }
-        })();
-
-        btn.onclick = run;
-        userIn.onkeypress = (e) => { if(e.key === 'Enter') run(); };
-    </script>
-</body>
-</html>
+btn.onclick = run;
+userIn.onkeypress = (e) => { if (e.key === 'Enter') run(); };
+</script>
