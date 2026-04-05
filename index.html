@@ -1,7 +1,7 @@
 <script type="module">
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-// SETTINGS
+// SETTINGS (safe + stable)
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 env.remoteHost = 'https://huggingface.co/';
@@ -16,22 +16,24 @@ const btn = document.getElementById('send-btn');
 
 let bot;
 
-// 🔥 MEMORY SYSTEM (makes it feel "unlimited")
+// MEMORY (makes it feel smarter)
 let history = [
-    "You are a helpful, smart AI assistant. Speak clearly and make sense."
+    "You are a helpful AI assistant. Respond clearly and make sense."
 ];
 
 async function init() {
     try {
-        // 🔥 MUCH BETTER MODEL
+        status.textContent = "LOADING MODEL...";
+
+        // ✅ RELIABLE MODEL (won’t get blocked like Phi-3)
         bot = await pipeline(
             'text-generation',
-            'Xenova/Phi-3-mini-4k-instruct',
+            'Xenova/SmolLM2-360M-Instruct',
             {
                 progress_callback: (p) => {
                     if (p.status === 'progress') {
                         progress.style.width = p.progress + '%';
-                        status.textContent = `LOADING MODEL: ${Math.round(p.progress)}%`;
+                        status.textContent = `LOADING: ${Math.round(p.progress)}%`;
                     }
                 }
             }
@@ -43,7 +45,7 @@ async function init() {
         userIn.placeholder = "Talk to me...";
 
     } catch (e) {
-        status.textContent = "ERROR LOADING MODEL";
+        status.textContent = "ERROR: " + e.message;
         console.error(e);
     }
 }
@@ -57,31 +59,40 @@ async function run() {
     btn.disabled = true;
     status.textContent = "THINKING...";
 
-    // 🧠 ADD TO MEMORY
+    // Add to memory
     history.push(`User: ${text}`);
 
-    // 🔥 BUILD FULL CONTEXT (VERY HIGH LIMIT)
+    // Build prompt
     let prompt = history.join("\n") + "\nAssistant:";
 
-    const out = await bot(prompt, {
-        max_new_tokens: 300,       // 🔥 VERY HIGH RESPONSE LENGTH
-        temperature: 0.7,
-        top_p: 0.9,
-        repetition_penalty: 1.1,
-        do_sample: true
-    });
+    try {
+        const out = await bot(prompt, {
+            max_new_tokens: 200,
+            temperature: 0.7,
+            top_p: 0.9,
+            repetition_penalty: 1.1,
+            do_sample: true
+        });
 
-    let reply = out[0].generated_text.replace(prompt, '').trim();
+        let reply = out[0].generated_text.replace(prompt, '').trim();
 
-    // 🧠 SAVE RESPONSE
-    history.push(`Assistant: ${reply}`);
+        if (!reply) reply = "I’m not sure how to respond to that.";
 
-    // 🔥 PREVENT INFINITE MEMORY CRASH
-    if (history.length > 20) {
-        history.splice(1, 2); // remove oldest messages (keep system prompt)
+        // Save response
+        history.push(`Assistant: ${reply}`);
+
+        // Prevent crashes (keeps memory but trims old messages)
+        if (history.length > 20) {
+            history.splice(1, 2);
+        }
+
+        chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply}</div>`;
+
+    } catch (e) {
+        console.error(e);
+        chat.innerHTML += `<div style="color:red;"><b>Error:</b> Failed to generate response.</div>`;
+        status.textContent = "GENERATION ERROR";
     }
-
-    chat.innerHTML += `<div style="color:#58a6ff; margin-top:10px;"><b>AI:</b> ${reply}</div>`;
 
     btn.disabled = false;
     status.textContent = "● ENGINE READY";
@@ -90,20 +101,26 @@ async function run() {
 
 // CLEAN CACHE ON FIRST RUN
 (async () => {
-    if (!localStorage.getItem('v18_cleaned')) {
-        const dbs = await indexedDB.databases();
-        for (let db of dbs) {
-            if (db.name.includes('transformers')) {
-                await indexedDB.deleteDatabase(db.name);
+    if (!localStorage.getItem('ai_cleaned_v2')) {
+        try {
+            const dbs = await indexedDB.databases();
+            for (let db of dbs) {
+                if (db.name && db.name.includes('transformers')) {
+                    await indexedDB.deleteDatabase(db.name);
+                }
             }
+        } catch (e) {
+            console.warn("Cache cleanup failed:", e);
         }
-        localStorage.setItem('v18_cleaned', 'true');
+
+        localStorage.setItem('ai_cleaned_v2', 'true');
         window.location.reload();
     } else {
         init();
     }
 })();
 
+// EVENTS
 btn.onclick = run;
 userIn.onkeypress = (e) => { if (e.key === 'Enter') run(); };
 </script>
